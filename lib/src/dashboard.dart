@@ -446,6 +446,7 @@ class Dashboard<T> extends ChangeNotifier {
     elements.removeWhere((element) {
       if (element.id == id) {
         elementId = element.id;
+        element.dispose();
       }
       return element.id == id;
     });
