@@ -423,6 +423,8 @@ class _DrawingArrowWidgetState extends State<DrawingArrowWidget> {
         params: DrawingArrow.instance.params,
         from: DrawingArrow.instance.from,
         to: DrawingArrow.instance.to,
+        srcElementSize: DrawingArrow.instance.srcElementSize,
+        destElementSize: DrawingArrow.instance.destElementSize,
       ),
     );
   }

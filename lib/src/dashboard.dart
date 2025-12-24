@@ -3,8 +3,7 @@
 
 import 'dart:convert';
 
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/widgets.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter_flow_chart/flutter_flow_chart.dart';
 import 'package:flutter_flow_chart/src/platform/platform.dart';
 import 'package:flutter_flow_chart/src/store.dart';
@@ -26,12 +25,19 @@ class Dashboard<T> extends ChangeNotifier {
     Offset? handlerFeedbackOffset,
     this.blockDefaultZoomGestures = false,
     this.minimumZoomFactor = 0.25,
-    this.defaultArrowStyle = ArrowStyle.curve,
     DataSerializer<T, dynamic>? dataSerializer,
+    ArrowStyle defaultArrowStyle = ArrowStyle.curve,
+    ArrowEndingStyle defaultArrowEndingStyle = ArrowEndingStyle.circle,
+    Color defaultArrowColor = Colors.black,
+    Size defaultArrowEndingSize = const Size(12, 16),
   })  : elements = [],
         _dashboardPosition = Offset.zero,
         dashboardSize = Size.zero,
-        gridBackgroundParams = GridBackgroundParams() {
+        gridBackgroundParams = GridBackgroundParams(),
+        _defaultArrowStyle = defaultArrowStyle,
+        _defaultArrowEndingStyle = defaultArrowEndingStyle,
+        _defaultArrowColor = defaultArrowColor,
+        _defaultArrowEndingSize = defaultArrowEndingSize {
     // This is a workaround to set the handlerFeedbackOffset
     // to improve the user experience on devices with touch screens
     // This will prevent the handler being covered by user's finger
@@ -101,8 +107,25 @@ class Dashboard<T> extends ChangeNotifier {
   /// Dashboard size
   Size dashboardSize;
 
+  late ArrowStyle _defaultArrowStyle;
+
   /// The default style for the new created arrow
-  final ArrowStyle defaultArrowStyle;
+  ArrowStyle get defaultArrowStyle => _defaultArrowStyle;
+
+  late ArrowEndingStyle _defaultArrowEndingStyle;
+
+  /// The default style for the new created arrow
+  ArrowEndingStyle get defaultArrowEndingStyle => _defaultArrowEndingStyle;
+
+  late Color _defaultArrowColor;
+
+  /// The default color for the new created arrow
+  Color get defaultArrowColor => _defaultArrowColor;
+
+  late Size _defaultArrowEndingSize;
+
+  /// The default ending size for the new created arrow
+  Size get defaultArrowEndingSize => _defaultArrowEndingSize;
 
   /// [handlerFeedbackOffset] sets an offset for the handler when user
   /// is dragging it.
@@ -195,6 +218,26 @@ class Dashboard<T> extends ChangeNotifier {
   }) {
     element.isEditingText = editing;
     if (notify) notifyListeners();
+  }
+
+  /// Set the default arrow style.
+  void setDefaultArrowStyle(ArrowStyle style) {
+    _defaultArrowStyle = style;
+  }
+
+  /// Set the default ending style.
+  void setdefaultArrowEndingStyle(ArrowEndingStyle style) {
+    _defaultArrowEndingStyle = style;
+  }
+
+  /// Set the default arrow color.
+  void setDefaultArrowColor(Color color) {
+    _defaultArrowColor = color;
+  }
+
+  /// Set the default arrow ending size.
+  void setDefaultArrowEndingSize(Size size) {
+    _defaultArrowEndingSize = size;
   }
 
   /// Set a new [style] to the arrow staring from [src] pointing to [dest].

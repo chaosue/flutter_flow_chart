@@ -155,12 +155,14 @@ class _ElementHandler<T> extends StatelessWidget {
       alignment: alignment,
       child: DragTarget<Map<dynamic, dynamic>>(
         onWillAcceptWithDetails: (details) {
-          DrawingArrow.instance.setParams(
-            DrawingArrow.instance.params.copyWith(
-              endArrowPosition: alignment,
-              style: dashboard.defaultArrowStyle,
-            ),
-          );
+          DrawingArrow.instance
+            ..setParams(
+              DrawingArrow.instance.params.copyWith(
+                endArrowPosition: alignment,
+                style: dashboard.defaultArrowStyle,
+              ),
+            )
+            ..setDestElementSize(element.size);
           return element != details.data['srcElement'] as FlowElement<T>;
         },
         onAcceptWithDetails: (details) {
@@ -235,14 +237,23 @@ class _ElementHandler<T> extends StatelessWidget {
                 height: handlerSize,
               ),
             ),
+            onDragStarted: () {
+              DrawingArrow.instance.setSrcElementSize(element.size);
+            },
             onDragUpdate: (details) {
               if (!isDragging) {
-                DrawingArrow.instance.params = ArrowParams(
-                  startArrowPosition: alignment,
-                  endArrowPosition: Alignment.center,
-                );
-                DrawingArrow.instance.from =
-                    details.globalPosition - dashboard.position;
+                DrawingArrow.instance
+                  ..setParams(
+                    ArrowParams(
+                      startArrowPosition: alignment,
+                      endArrowPosition: Alignment.center,
+                      style: dashboard.defaultArrowStyle,
+                      endingStyle: dashboard.defaultArrowEndingStyle,
+                      endingSize: dashboard.defaultArrowEndingSize,
+                      color: dashboard.defaultArrowColor,
+                    ),
+                  )
+                  ..setFrom(details.globalPosition - dashboard.position);
                 isDragging = true;
               }
               DrawingArrow.instance.setTo(

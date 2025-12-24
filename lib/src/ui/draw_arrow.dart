@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter_flow_chart/flutter_flow_chart.dart';
 import 'package:flutter_flow_chart/src/ui/segment_handler.dart';
@@ -16,6 +17,15 @@ enum ArrowStyle {
   rectangular,
 }
 
+/// Styles for tail of the arrow.
+enum ArrowEndingStyle {
+  /// draw the tail as circle.
+  circle,
+
+  /// draw the tail as triangle.
+  triangle,
+}
+
 /// Arrow parameters used by [DrawArrow] widget
 class ArrowParams extends ChangeNotifier {
   ///
@@ -24,20 +34,26 @@ class ArrowParams extends ChangeNotifier {
     this.headRadius = 6,
     double tailLength = 25.0,
     this.color = Colors.black,
-    this.style,
+    this.style = ArrowStyle.curve,
     this.tension = 1.0,
     this.startArrowPosition = Alignment.centerRight,
     this.endArrowPosition = Alignment.centerLeft,
+    this.endingStyle = ArrowEndingStyle.circle,
+    this.endingSize = const Size(12, 16),
   }) : _tailLength = tailLength;
 
   ///
   factory ArrowParams.fromMap(Map<String, dynamic> map) {
+    final endingSize = map['endingSize'] as Map<String, double?>? ??
+        const {'width': 12, 'height': 16};
     return ArrowParams(
       thickness: (map['thickness'] as num).toDouble(),
       headRadius: ((map['headRadius'] ?? 6.0) as num).toDouble(),
       tailLength: ((map['tailLength'] ?? 25.0) as num).toDouble(),
       color: Color(map['color'] as int),
       style: ArrowStyle.values[map['style'] as int? ?? 0],
+      endingStyle: ArrowEndingStyle.values[map['endingStyle'] as int? ?? 0],
+      endingSize: Size(endingSize['width'] ?? 12, endingSize['height'] ?? 16),
       tension: ((map['tension'] ?? 1) as num).toDouble(),
       startArrowPosition: Alignment(
         (map['startArrowPositionX'] as num).toDouble(),
@@ -79,6 +95,12 @@ class ArrowParams extends ChangeNotifier {
   /// 0 means no curve on segments.
   double tension;
 
+  /// The ending style of the arrow.
+  ArrowEndingStyle endingStyle;
+
+  /// The size of the ending.
+  Size endingSize;
+
   ///
   ArrowParams copyWith({
     double? thickness,
@@ -87,6 +109,8 @@ class ArrowParams extends ChangeNotifier {
     double? tension,
     Alignment? startArrowPosition,
     Alignment? endArrowPosition,
+    ArrowEndingStyle? endingStyle,
+    Size? endingSize,
   }) {
     return ArrowParams(
       thickness: thickness ?? this.thickness,
@@ -95,6 +119,8 @@ class ArrowParams extends ChangeNotifier {
       tension: tension ?? this.tension,
       startArrowPosition: startArrowPosition ?? this.startArrowPosition,
       endArrowPosition: endArrowPosition ?? this.endArrowPosition,
+      endingStyle: endingStyle ?? this.endingStyle,
+      endingSize: endingSize ?? this.endingSize,
     );
   }
 
@@ -111,6 +137,8 @@ class ArrowParams extends ChangeNotifier {
       'startArrowPositionY': startArrowPosition.y,
       'endArrowPositionX': endArrowPosition.x,
       'endArrowPositionY': endArrowPosition.y,
+      'endingStyle': endingStyle.index,
+      'endingSize': {'width': endingSize.width, 'height': endingSize.height},
     };
   }
 
@@ -122,6 +150,8 @@ class ArrowParams extends ChangeNotifier {
     thickness = thickness / currentZoom * factor;
     headRadius = headRadius / currentZoom * factor;
     _tailLength = _tailLength / currentZoom * factor;
+    endingSize =
+        Size(endingSize.width, endingSize.height) / currentZoom * factor;
     notifyListeners();
   }
 
@@ -129,37 +159,65 @@ class ArrowParams extends ChangeNotifier {
   double get tailLength => _tailLength;
 }
 
-/// Notifier to update arrows position, starting/ending points and params
+/// Notifier to update arrows position, starting/tail points and params
 class DrawingArrow extends ChangeNotifier {
   DrawingArrow._();
 
   /// Singleton instance of this.
   static final instance = DrawingArrow._();
 
+  ArrowParams _params = ArrowParams();
+
   /// Arrow parameters.
-  ArrowParams params = ArrowParams();
+  ArrowParams get params => _params;
 
   /// Sets the parameters.
   void setParams(ArrowParams params) {
-    this.params = params;
+    _params = params;
     notifyListeners();
   }
 
   /// Starting arrow offset.
-  Offset from = Offset.zero;
+  Offset _from = Offset.zero;
+  Offset get from => _from;
 
   ///
   void setFrom(Offset from) {
-    this.from = from;
+    _from = from;
     notifyListeners();
   }
 
-  /// Ending arrow offset.
-  Offset to = Offset.zero;
+  Offset _to = Offset.zero;
+
+  /// Tail arrow offset.
+  Offset get to => _to;
 
   ///
   void setTo(Offset to) {
-    this.to = to;
+    _to = to;
+    notifyListeners();
+  }
+
+  ///
+  Size _srcElementSize = Size.zero;
+
+  /// The size of the source element.
+  Size get srcElementSize => _srcElementSize;
+
+  /// Sets the size of the source element.
+  void setSrcElementSize(Size size) {
+    _srcElementSize = size;
+    notifyListeners();
+  }
+
+  Size _destElementSize = Size.zero;
+
+  /// The size of the destination element.
+  Size get destElementSize => _destElementSize;
+
+  /// Sets the size of the destination element.
+  void setDestElementSize(Size size) {
+    _destElementSize = size;
     notifyListeners();
   }
 
@@ -170,9 +228,11 @@ class DrawingArrow extends ChangeNotifier {
 
   ///
   void reset() {
-    params = ArrowParams();
-    from = Offset.zero;
-    to = Offset.zero;
+    _params = ArrowParams();
+    _from = Offset.zero;
+    _to = Offset.zero;
+    _srcElementSize = Size.zero;
+    _destElementSize = Size.zero;
     notifyListeners();
   }
 }
@@ -231,7 +291,6 @@ class _DrawArrowState extends State<DrawArrow> {
   Widget build(BuildContext context) {
     var from = Offset.zero;
     var to = Offset.zero;
-
     from = Offset(
       widget.srcElement.position.dx +
           widget.srcElement.handlerSize / 2.0 +
@@ -262,6 +321,8 @@ class _DrawArrowState extends State<DrawArrow> {
               from: from,
               to: to,
               pivots: widget.pivots.value,
+              srcElementSize: widget.srcElement.size,
+              destElementSize: widget.destElement.size,
             ),
             child: Container(),
           );
@@ -280,8 +341,16 @@ class ArrowPainter extends CustomPainter {
     required this.params,
     required this.from,
     required this.to,
+    required this.srcElementSize,
+    required this.destElementSize,
     List<Pivot>? pivots,
   }) : pivots = pivots ?? [];
+
+  ///
+  final Size srcElementSize;
+
+  ///
+  final Size destElementSize;
 
   ///
   final ArrowParams params;
@@ -312,13 +381,191 @@ class ArrowPainter extends CustomPainter {
     } else if (params.style == ArrowStyle.rectangular) {
       drawRectangularLine(canvas, paint);
     }
-
-    canvas.drawCircle(to, params.headRadius, paint);
+    drawEnding(canvas);
 
     paint
       ..color = params.color
       ..style = PaintingStyle.stroke;
     canvas.drawPath(path, paint);
+  }
+
+  /// Calculate the line end offset as per [ArrowParams.endArrowPosition] and [ArrowParams.endingStyle].
+  /// e.g. when [ArrowParams.endingStyle] is [ArrowEndingStyle.triangle], it should avoid drawing the line into the triangle,
+  /// so the line end offset should be adjusted by [ArrowParams.endingSize]. Besides, the triangle heading must be corrected when dragging.
+  Offset calculateLineEndOffset(Offset originalTo) {
+    Offset p;
+    switch (params.endingStyle) {
+      case ArrowEndingStyle.triangle:
+        switch (params.endArrowPosition) {
+          case Alignment.topCenter:
+            p = Offset(originalTo.dx, originalTo.dy - params.endingSize.height);
+          case Alignment.bottomCenter:
+            p = Offset(originalTo.dx, originalTo.dy + params.endingSize.height);
+          case Alignment.centerRight:
+            p = Offset(originalTo.dx + params.endingSize.height, originalTo.dy);
+          case Alignment.centerLeft:
+            p = Offset(originalTo.dx - params.endingSize.height, originalTo.dy);
+          default:
+            p = Offset(originalTo.dx, originalTo.dy);
+        }
+      case ArrowEndingStyle.circle:
+        switch (params.endArrowPosition) {
+          case Alignment.topCenter:
+            p = Offset(originalTo.dx, originalTo.dy - params.headRadius);
+          case Alignment.bottomCenter:
+            p = Offset(originalTo.dx, originalTo.dy + params.headRadius);
+          case Alignment.centerRight:
+            p = Offset(originalTo.dx + params.headRadius, originalTo.dy);
+          case Alignment.centerLeft:
+            p = Offset(originalTo.dx - params.headRadius, originalTo.dy);
+          default:
+            p = Offset(originalTo.dx, originalTo.dy);
+        }
+    }
+    return p;
+  }
+
+  /// Draw the ending of arrow line.
+  void drawEnding(Canvas canvas) {
+    switch (params.endingStyle) {
+      case ArrowEndingStyle.triangle:
+        drawTriangleEnding(canvas);
+      case ArrowEndingStyle.circle:
+        drawCircleEnding(canvas);
+    }
+  }
+
+  /// Draw the ending of arrow line as a circle.
+  void drawCircleEnding(Canvas canvas) {
+    Offset center;
+    switch (params.endArrowPosition) {
+      case Alignment.topCenter:
+      case Alignment.bottomCenter:
+      case Alignment.centerLeft:
+      case Alignment.centerRight:
+        center = to;
+      default:
+        // when dragging
+        final dX = to.dx - from.dx;
+        final dY = to.dy - from.dy;
+        if (dY.abs() > dX.abs()) {
+          // vertical heading
+          if (dY > 0) {
+            // heading down
+            center = Offset(to.dx, to.dy + params.headRadius);
+          } else {
+            // heading up
+            center = Offset(to.dx, to.dy - params.headRadius);
+          }
+        } else {
+          // horizontal headding
+          if (dX > 0) {
+            // heading right
+            center = Offset(to.dx + params.headRadius, to.dy);
+          } else {
+            // heading left
+            center = Offset(to.dx - params.headRadius, to.dy);
+          }
+        }
+    }
+    canvas.drawCircle(
+      center,
+      params.headRadius,
+      Paint()
+        ..strokeWidth = params.thickness
+        ..color = params.color,
+    );
+  }
+
+  /// Draw a triangle ending.
+  void drawTriangleEnding(Canvas canvas) {
+    final endingPaint = Paint()
+      ..style = PaintingStyle.fill
+      ..color = params.color;
+    final endingPath = Path()..moveTo(to.dx, to.dy);
+    switch (params.endArrowPosition) {
+      case Alignment.topCenter:
+        endingPath
+          ..relativeLineTo(
+              -params.endingSize.width / 2, -params.endingSize.height)
+          ..relativeLineTo(params.endingSize.width, 0)
+          ..relativeLineTo(
+              -params.endingSize.width / 2, params.endingSize.height);
+      case Alignment.bottomCenter:
+        endingPath
+          ..relativeLineTo(
+              -params.endingSize.width / 2, params.endingSize.height)
+          ..relativeLineTo(params.endingSize.width, 0)
+          ..relativeLineTo(
+              -params.endingSize.width / 2, -params.endingSize.height);
+      case Alignment.centerLeft:
+        endingPath
+          ..relativeLineTo(
+              -params.endingSize.height, -params.endingSize.width / 2)
+          ..relativeLineTo(0, params.endingSize.width)
+          ..relativeLineTo(
+              params.endingSize.height, -params.endingSize.width / 2);
+      case Alignment.centerRight:
+        endingPath
+          ..relativeLineTo(
+              params.endingSize.height, -params.endingSize.width / 2)
+          ..relativeLineTo(0, params.endingSize.width)
+          ..relativeLineTo(
+              -params.endingSize.height, -params.endingSize.width / 2);
+      default:
+        final dX = to.dx - from.dx;
+        final dY = to.dy - from.dy;
+        if (dY.abs() > dX.abs()) {
+          // vertical heading
+          if (dY > 0) {
+            // heading down
+            endingPath
+              ..relativeLineTo(-params.endingSize.width / 2, 0)
+              ..relativeLineTo(
+                  params.endingSize.width / 2, params.endingSize.height)
+              ..relativeLineTo(
+                  params.endingSize.width / 2, -params.endingSize.height);
+          } else {
+            // heading up
+            endingPath
+              ..relativeLineTo(-params.endingSize.width / 2, 0)
+              ..relativeLineTo(
+                  params.endingSize.width / 2, -params.endingSize.height)
+              ..relativeLineTo(
+                  params.endingSize.width / 2, params.endingSize.height);
+          }
+        } else {
+          // horizontal headding
+          if (dX > 0) {
+            // heading right
+            endingPath
+              ..relativeLineTo(0, -params.endingSize.width / 2)
+              ..relativeLineTo(
+                params.endingSize.height,
+                params.endingSize.width / 2,
+              )
+              ..relativeLineTo(
+                -params.endingSize.height,
+                params.endingSize.width / 2,
+              );
+          } else {
+            // heading left
+            endingPath
+              ..relativeLineTo(0, -params.endingSize.width / 2)
+              ..relativeLineTo(
+                -params.endingSize.height,
+                params.endingSize.width / 2,
+              )
+              ..relativeLineTo(
+                params.endingSize.height,
+                params.endingSize.width / 2,
+              );
+          }
+        }
+    }
+
+    endingPath.close();
+    canvas.drawPath(endingPath, endingPaint);
   }
 
   /// Draw a segmented line with a tension between points.
@@ -350,28 +597,541 @@ class ArrowPainter extends CustomPainter {
   /// Draw a rectangular line
   void drawRectangularLine(Canvas canvas, Paint paint) {
     // calculating offsetted pivot
-    var pivot1 = Offset(from.dx, from.dy);
+    Offset pivot0;
+    Offset pivot1;
+    Offset? pivot2;
+    Offset? pivot3;
+    Offset? pivot4;
+    Offset? pivot5;
+    var dragging = false;
+    final end = calculateLineEndOffset(to);
+    // from bottomcenter handler
     if (params.startArrowPosition.y == 1) {
-      pivot1 = Offset(from.dx, from.dy + params.tailLength);
+      pivot0 = Offset(from.dx, from.dy + params.headRadius);
+      pivot1 = Offset(pivot0.dx, pivot0.dy + params.tailLength);
+      if (params.endArrowPosition.y == -1) {
+        final dY = end.dy - pivot1.dy;
+        if (dY > 0) {
+          pivot2 = Offset(end.dx, pivot1.dy);
+        } else {
+          double x;
+          if (end.dx > pivot1.dx) {
+            x = end.dx - destElementSize.width / 2 - 10;
+          } else {
+            x = end.dx + destElementSize.width / 2 + 10;
+          }
+          pivot2 = Offset(x, pivot1.dy);
+          pivot3 = Offset(pivot2.dx, pivot2.dy - params.tailLength + dY);
+          pivot4 = Offset(end.dx, pivot3.dy);
+        }
+      } else if (params.endArrowPosition.y == 1) {
+        if (pivot1.dy < end.dy) {
+          double x;
+          if (end.dx > pivot1.dx) {
+            x = end.dx - destElementSize.width / 2 - 10;
+          } else {
+            x = end.dx + destElementSize.width / 2 + 10;
+          }
+          pivot2 = Offset(x, pivot1.dy);
+          pivot3 = Offset(pivot2.dx, end.dy + params.tailLength);
+          pivot4 = Offset(end.dx, pivot3.dy);
+        } else {
+          pivot2 = Offset(end.dx, pivot1.dy);
+        }
+      } else if (params.endArrowPosition.x == 1) {
+        final dHY = end.dy - pivot1.dy - destElementSize.height / 2 - 10;
+        if (dHY < 0) {
+          if (dHY.abs() < destElementSize.height + 10 + params.headRadius) {
+            if (end.dx > pivot1.dx) {
+              pivot2 = Offset(to.dx - destElementSize.width - 10, pivot1.dy);
+              pivot3 = Offset(pivot2.dx, pivot2.dy + dHY);
+              pivot4 = Offset(end.dx + params.tailLength, pivot3.dy);
+              pivot5 = Offset(pivot4.dx, end.dy);
+            } else {
+              pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+              pivot3 = Offset(pivot2.dx, end.dy);
+            }
+          } else {
+            pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy);
+          }
+        } else {
+          pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+          pivot3 = pivot4 = Offset(pivot2.dx, end.dy);
+        }
+      } else if (params.endArrowPosition.x == -1) {
+        if (to.dx < pivot1.dx) {
+          if (end.dy - pivot1.dy > destElementSize.height / 2 + 10) {
+            pivot2 = Offset(end.dx - params.tailLength, pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy);
+          } else {
+            pivot2 = Offset(
+                to.dx + destElementSize.width + params.tailLength, pivot1.dy);
+            if (end.dy + destElementSize.height / 2 > pivot1.dy) {
+              pivot3 =
+                  Offset(pivot2.dx, end.dy - destElementSize.height / 2 - 10);
+              pivot4 = Offset(end.dx - params.tailLength, pivot3.dy);
+              pivot5 = Offset(pivot4.dx, end.dy);
+            } else {
+              pivot3 =
+                  Offset(pivot2.dx, end.dy + destElementSize.height / 2 + 10);
+              pivot4 = Offset(end.dx - params.tailLength, pivot3.dy);
+              pivot5 = Offset(pivot4.dx, end.dy);
+            }
+          }
+        } else {
+          pivot2 = Offset(end.dx - params.tailLength, pivot1.dy);
+          pivot3 = Offset(pivot2.dx, end.dy);
+        }
+      } else {
+        dragging = true;
+      }
     } else if (params.startArrowPosition.y == -1) {
-      pivot1 = Offset(from.dx, from.dy - params.tailLength);
+      // from top center
+      pivot0 = Offset(from.dx, from.dy - params.headRadius);
+      pivot1 = Offset(pivot0.dx, pivot0.dy - params.tailLength);
+      if (params.endArrowPosition.y == -1) {
+        if (end.dy - params.tailLength > pivot1.dy) {
+          pivot2 = Offset(end.dx, pivot1.dy);
+        } else {
+          pivot2 = Offset(pivot1.dx, end.dy - params.tailLength);
+          pivot3 = Offset(end.dx, pivot2.dy);
+        }
+      } else if (params.endArrowPosition.y == 1) {
+        if (pivot1.dy - params.tailLength > end.dy) {
+          pivot2 = Offset(end.dx, pivot1.dy);
+        } else {
+          if (from.dx < to.dx) {
+            pivot2 = Offset(end.dx - destElementSize.width / 2 - 10, pivot1.dy);
+          } else {
+            pivot2 = Offset(end.dx + destElementSize.width / 2 + 10, pivot1.dy);
+          }
+          pivot3 = Offset(pivot2.dx, end.dy + params.tailLength);
+          pivot4 = Offset(end.dx, pivot3.dy);
+        }
+      } else if (params.endArrowPosition.x == 1) {
+        if (pivot1.dy - destElementSize.height / 2 - 10 > end.dy) {
+          pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+          pivot3 = Offset(pivot2.dx, end.dy);
+        } else {
+          if (from.dx < to.dx) {
+            final tDy = end.dy - destElementSize.height / 2 - 10;
+            pivot2 = Offset(pivot1.dx, tDy > pivot1.dy ? pivot1.dy : tDy);
+            pivot3 = Offset(end.dx + params.tailLength, pivot2.dy);
+            pivot4 = Offset(pivot3.dx, end.dy);
+          } else {
+            pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy);
+          }
+        }
+      } else if (params.endArrowPosition.x == -1) {
+        final dHY = end.dy - pivot1.dy;
+        if (dHY.abs() < destElementSize.height / 2 + 10 && to.dx < from.dx) {
+          pivot2 = Offset(pivot1.dx, end.dy - 10 - destElementSize.height / 2);
+          pivot3 = Offset(end.dx - params.tailLength, pivot2.dy);
+          pivot4 = Offset(pivot3.dx, end.dy);
+        } else {
+          pivot2 = Offset(end.dx - params.tailLength, pivot1.dy);
+          pivot3 = Offset(pivot2.dx, end.dy);
+        }
+      } else {
+        dragging = true;
+      }
+    } else if (params.startArrowPosition.x == -1) {
+      // from left center
+      pivot0 = Offset(from.dx - params.headRadius, from.dy);
+      pivot1 = Offset(pivot0.dx - params.tailLength, pivot0.dy);
+      if (params.endArrowPosition.y == -1) {
+        if (pivot1.dy > to.dy + destElementSize.height / 2) {
+          if (pivot1.dx <
+              end.dx + destElementSize.width / 2 + params.tailLength) {
+            if (to.dx < from.dx + destElementSize.width / 2) {
+              pivot2 = Offset(pivot1.dx,
+                  to.dy + destElementSize.height + params.tailLength);
+              pivot3 = Offset(
+                  end.dx - destElementSize.width / 2 - params.tailLength,
+                  pivot2.dy);
+              pivot4 = Offset(pivot3.dx, end.dy - params.tailLength);
+              pivot5 = Offset(end.dx, pivot4.dy);
+            } else {
+              pivot2 = Offset(pivot1.dx, end.dy - params.tailLength);
+              pivot3 = Offset(end.dx, pivot2.dy);
+            }
+          } else {
+            pivot2 = Offset(pivot1.dx, end.dy - params.tailLength);
+            pivot3 = Offset(end.dx, pivot2.dy);
+          }
+        } else {
+          if (end.dx < pivot1.dx) {
+            if (pivot1.dy > end.dy - params.tailLength) {
+              pivot2 = Offset(pivot1.dx, end.dy - params.tailLength);
+              pivot3 = Offset(end.dx, pivot2.dy);
+            } else {
+              pivot2 = Offset(end.dx, pivot1.dy);
+            }
+          } else {
+            if (pivot1.dy + destElementSize.height / 2 + params.tailLength <
+                end.dy) {
+              pivot2 = Offset(pivot1.dx, end.dy - params.tailLength);
+              pivot3 = Offset(end.dx, pivot2.dy);
+            } else {
+              pivot2 = Offset(pivot1.dx,
+                  pivot1.dy + destElementSize.height / 2 + params.tailLength);
+              pivot3 = Offset(
+                  end.dx - destElementSize.width / 2 - params.tailLength,
+                  pivot2.dy);
+              pivot4 = Offset(pivot3.dx, end.dy - params.tailLength);
+              pivot5 = Offset(end.dx, pivot4.dy);
+            }
+          }
+        }
+      } else if (params.endArrowPosition.y == 1) {
+        if (pivot1.dy - params.tailLength > end.dy) {
+          if (end.dx < pivot1.dx) {
+            pivot2 = Offset(end.dx, pivot1.dy);
+          } else {
+            if (end.dy + params.tailLength <
+                from.dy - destElementSize.height / 2 - params.tailLength) {
+              pivot2 = Offset(pivot1.dx, end.dy + params.tailLength);
+              pivot3 = Offset(end.dx, pivot2.dy);
+            } else {
+              pivot2 = Offset(pivot1.dx,
+                  pivot1.dy - destElementSize.height / 2 - params.tailLength);
+              final tX = end.dx - destElementSize.width / 2 - params.tailLength;
+              pivot3 = Offset(
+                  tX < pivot2.dx ? pivot2.dx + params.thickness + 1 : tX,
+                  pivot2.dy);
+              pivot4 = Offset(pivot3.dx, end.dy + params.tailLength);
+              pivot5 = Offset(end.dx, pivot4.dy);
+            }
+          }
+        } else {
+          if (end.dx + srcElementSize.width / 2 + params.tailLength <
+              pivot1.dx) {
+            pivot2 = Offset(pivot1.dx, end.dy + params.tailLength);
+            pivot3 = Offset(end.dx, pivot2.dy);
+          } else {
+            final tX = to.dx - destElementSize.width / 2 - params.tailLength;
+            var tY = pivot1.dy;
+            if (tY > to.dy - srcElementSize.height - params.tailLength &&
+                pivot1.dy < to.dy + params.tailLength) {
+              if (pivot1.dx <
+                  to.dx - destElementSize.width / 2 - params.tailLength) {
+                tY = end.dy + params.tailLength;
+                final tYSrc =
+                    from.dy + destElementSize.height / 2 + params.tailLength;
+                pivot2 = Offset(pivot1.dx, max(tY, tYSrc));
+                pivot3 = Offset(end.dx, pivot2.dy);
+              } else {
+                tY = to.dy - srcElementSize.height - params.tailLength;
+                pivot2 = Offset(pivot1.dx, tY);
+                pivot3 = Offset(tX, pivot2.dy);
+                pivot4 = Offset(pivot3.dx, end.dy + params.tailLength);
+                pivot5 = Offset(end.dx, pivot4.dy);
+              }
+            } else {
+              pivot2 = Offset(tX < pivot1.dx ? tX : pivot1.dx, tY);
+              tY = end.dy + params.tailLength;
+              final tYMin =
+                  pivot1.dy + destElementSize.height / 2 + params.tailLength;
+              pivot3 = Offset(pivot2.dx, tY > tYMin ? tY : tYMin);
+              pivot4 = Offset(end.dx, pivot3.dy);
+            }
+          }
+        }
+      } else if (params.endArrowPosition.x == -1) {
+        if (pivot1.dy <
+            end.dy - destElementSize.height / 2 - params.tailLength) {
+          if (to.dx > from.dx) {
+            pivot2 = Offset(pivot1.dx, end.dy);
+          } else {
+            pivot2 = Offset(end.dx - params.tailLength, pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy);
+          }
+        } else if (pivot1.dy <= end.dy) {
+          if (from.dx > to.dx) {
+            pivot2 = Offset(pivot1.dx,
+                end.dy - destElementSize.height / 2 - params.tailLength);
+            pivot3 = Offset(end.dx - params.tailLength, pivot2.dy);
+            pivot4 = Offset(pivot3.dx, end.dy);
+          } else {
+            pivot2 = Offset(pivot1.dx,
+                pivot1.dy - srcElementSize.height / 2 - params.tailLength);
+            pivot3 = Offset(end.dx - params.tailLength, pivot2.dy);
+            pivot4 = Offset(pivot3.dx, end.dy);
+          }
+        } else {
+          if (pivot1.dy <
+              end.dy + destElementSize.height / 2 + params.tailLength) {
+            if (to.dx > from.dx) {
+              pivot2 = Offset(pivot1.dx,
+                  pivot1.dy - srcElementSize.height / 2 - params.tailLength);
+              pivot3 = Offset(end.dx - params.tailLength, pivot2.dy);
+              pivot4 = Offset(pivot3.dx, end.dy);
+            } else {
+              pivot2 = Offset(pivot1.dx,
+                  end.dy + destElementSize.height / 2 + params.tailLength);
+              pivot3 = Offset(end.dx - params.tailLength, pivot2.dy);
+              pivot4 = Offset(pivot3.dx, end.dy);
+            }
+          } else {
+            if (to.dx > from.dx) {
+              pivot2 = Offset(pivot1.dx, end.dy);
+            } else {
+              pivot2 = Offset(end.dx - params.tailLength, pivot1.dy);
+              pivot3 = Offset(pivot2.dx, end.dy);
+            }
+          }
+        }
+      } else if (params.endArrowPosition.x == 1) {
+        if (pivot1.dy <
+            end.dy - destElementSize.height / 2 - params.tailLength) {
+          if (pivot1.dx > end.dx + params.tailLength) {
+            pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy);
+          } else {
+            pivot2 =
+                Offset(pivot1.dx, end.dy - destElementSize.height / 2 - 10);
+            pivot3 = Offset(end.dx + params.tailLength, pivot2.dy);
+            pivot4 = Offset(pivot3.dx, end.dy);
+          }
+        } else if (pivot1.dy <= end.dy) {
+          if (pivot1.dx > to.dx + params.tailLength * 2) {
+            pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy);
+          } else {
+            if (from.dx > to.dx) {
+              pivot2 = Offset(pivot1.dx, pivot1.dy + 10);
+              pivot3 = Offset(end.dx + params.tailLength, pivot2.dy);
+
+              pivot4 = Offset(pivot3.dx, end.dy);
+            } else {
+              final dX = to.dx - params.tailLength - destElementSize.width;
+              pivot2 = Offset(dX < pivot1.dx ? dX : pivot1.dx, pivot1.dy);
+              pivot3 = Offset(pivot2.dx,
+                  end.dy + params.tailLength + destElementSize.height / 2);
+              pivot4 = Offset(end.dx + params.tailLength, pivot3.dy);
+              pivot5 = Offset(pivot4.dx, end.dy);
+            }
+          }
+        } else {
+          if (from.dx > to.dx + params.tailLength * 2) {
+            pivot2 = Offset(pivot1.dx, end.dy);
+          } else {
+            if (from.dx > to.dx) {
+              pivot2 = Offset(pivot1.dx, pivot1.dy - 10);
+              pivot3 = Offset(end.dx + params.tailLength, pivot2.dy);
+              pivot4 = Offset(pivot3.dx, end.dy);
+            } else {
+              final tX = to.dx - destElementSize.width - params.tailLength;
+              pivot2 = Offset(tX < pivot1.dx ? tX : pivot1.dx, pivot1.dy);
+              pivot3 = Offset(pivot2.dx,
+                  end.dy - destElementSize.height / 2 - params.tailLength);
+              pivot4 = Offset(end.dx + params.tailLength, pivot3.dy);
+              pivot5 = Offset(pivot4.dx, end.dy);
+            }
+          }
+        }
+      } else {
+        dragging = true;
+      }
+    } else if (params.startArrowPosition.x == 1) {
+      // from right center
+      pivot0 = Offset(from.dx + params.headRadius, from.dy);
+      pivot1 = Offset(pivot0.dx + params.tailLength, pivot0.dy);
+      if (params.endArrowPosition.y == -1) {
+        if (end.dy > pivot1.dy + params.tailLength) {
+          if (end.dx > pivot1.dx) {
+            pivot2 = Offset(end.dx, pivot1.dy);
+          } else {
+            pivot2 = Offset(pivot1.dx, pivot1.dy + 10);
+            pivot3 = Offset(end.dx, pivot2.dy);
+          }
+        } else {
+          if (to.dy + destElementSize.height < pivot1.dy &&
+              to.dx - destElementSize.width / 2 < pivot1.dx &&
+              pivot1.dx < to.dx + destElementSize.width / 2) {
+            pivot2 = Offset(
+                to.dx + destElementSize.width / 2 + params.tailLength,
+                pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy - params.tailLength);
+            pivot4 = Offset(end.dx, pivot3.dy);
+          } else {
+            pivot2 = Offset(pivot1.dx, end.dy - params.tailLength);
+            pivot3 = Offset(end.dx, pivot2.dy);
+          }
+        }
+      } else if (params.endArrowPosition.y == 1) {
+        if (pivot1.dy > end.dy + params.tailLength) {
+          if (pivot1.dx < end.dx) {
+            pivot2 = Offset(end.dx, pivot1.dy);
+          } else {
+            final dY = end.dy + params.tailLength;
+            final tDY = from.dy - destElementSize.height / 2;
+            if (dY > tDY &&
+                end.dx + params.tailLength < from.dx - srcElementSize.width) {
+              pivot2 = Offset(pivot1.dx, tDY - 10);
+              pivot3 = Offset(end.dx + params.tailLength, pivot2.dy);
+              pivot4 = Offset(pivot3.dx, end.dy + params.tailLength);
+              pivot5 = Offset(end.dx, pivot4.dy);
+            } else {
+              pivot2 = Offset(pivot1.dx, dY);
+              pivot3 = Offset(end.dx, pivot2.dy);
+            }
+          }
+        } else {
+          final dX = end.dx - destElementSize.width / 2 - 10;
+          if (dX >= pivot1.dx) {
+            pivot2 = Offset(dX, pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy + params.tailLength);
+            pivot4 = Offset(end.dx, pivot3.dy);
+          } else {
+            if (pivot1.dx > to.dx - destElementSize.width / 2 &&
+                pivot1.dx < to.dx + destElementSize.width / 2) {
+              pivot2 =
+                  Offset(to.dx + destElementSize.width / 2 + 10, pivot1.dy);
+              pivot3 = Offset(pivot2.dx, end.dy + params.tailLength);
+              pivot4 = Offset(end.dx, pivot3.dy);
+            } else {
+              var dY = end.dy + params.tailLength;
+              final tDY = from.dy + srcElementSize.height / 2 + 10;
+              if (from.dx > to.dx + destElementSize.width / 2 && dY < tDY) {
+                dY = tDY;
+              }
+              pivot2 = Offset(pivot1.dx, dY);
+              pivot3 = Offset(end.dx, pivot2.dy);
+            }
+          }
+        }
+      } else if (params.endArrowPosition.x == -1) {
+        if (end.dx > pivot1.dx + params.tailLength) {
+          pivot2 = Offset(end.dx - params.tailLength, pivot1.dy);
+          pivot3 = Offset(pivot2.dx, end.dy);
+        } else {
+          if (pivot1.dx < end.dx) {
+            double dY;
+            if (to.dy > from.dy) {
+              final tDY = end.dy - 10;
+              if (tDY > pivot1.dy) {
+                dY = tDY;
+              } else {
+                dY = pivot1.dy + to.dy - from.dy;
+              }
+            } else {
+              final tDY = end.dy + 10;
+              if (tDY < pivot1.dy) {
+                dY = tDY;
+              } else {
+                dY = pivot1.dy - (from.dy - to.dy);
+              }
+            }
+            pivot2 = Offset(pivot1.dx, dY);
+            pivot3 = Offset(end.dx - params.tailLength, pivot2.dy);
+            pivot4 = Offset(pivot3.dx, end.dy);
+          } else {
+            double dY;
+            if (end.dy > pivot1.dy) {
+              final tDY = to.dy - destElementSize.height / 2 - 10;
+              dY = tDY > pivot1.dy ? tDY : pivot1.dy;
+            } else {
+              final tDY = to.dy + destElementSize.height / 2 + 10;
+              dY = tDY < pivot1.dy ? tDY : pivot1.dy;
+            }
+            pivot2 = Offset(pivot1.dx, dY);
+            pivot3 = Offset(end.dx - params.tailLength, pivot2.dy);
+            pivot4 = Offset(pivot3.dx, end.dy);
+          }
+        }
+      } else if (params.endArrowPosition.x == 1) {
+        if (to.dy + destElementSize.height / 2 + params.headRadius >
+            pivot1.dy) {
+          if (pivot1.dy < end.dy - destElementSize.height / 2 - 10) {
+            if (to.dx > from.dx) {
+              pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+              pivot3 = Offset(pivot2.dx, end.dy);
+            } else {
+              pivot2 = Offset(pivot1.dx, end.dy);
+            }
+          } else {
+            if (to.dx > from.dx) {
+              pivot2 = Offset(to.dx - destElementSize.width - 10, pivot1.dy);
+              pivot3 =
+                  Offset(pivot2.dx, to.dy - destElementSize.height / 2 - 10);
+              pivot4 = Offset(end.dx + params.tailLength, pivot3.dy);
+              pivot5 = Offset(pivot4.dx, end.dy);
+            } else {
+              final eDY =
+                  from.dy + srcElementSize.height / 2 + params.headRadius + 10;
+              if (end.dy > eDY) {
+                pivot2 = Offset(pivot1.dx, end.dy);
+              } else {
+                pivot2 = Offset(pivot1.dx, eDY);
+                pivot3 = Offset(end.dx + params.tailLength, pivot2.dy);
+                pivot4 = Offset(pivot3.dx, end.dy);
+              }
+            }
+          }
+        } else {
+          if (to.dx > from.dx) {
+            pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+            pivot3 = Offset(pivot2.dx, end.dy);
+          } else {
+            pivot2 = Offset(pivot1.dx, end.dy);
+          }
+        }
+      } else {
+        dragging = true;
+      }
+    } else {
+      // won't happend
+      pivot0 = pivot1 = pivot2 = Offset(end.dx, end.dy);
     }
 
-    final pivot2 = Offset(to.dx, pivot1.dy);
-
-    path
-      ..moveTo(from.dx, from.dy)
-      ..lineTo(pivot1.dx, pivot1.dy)
-      ..lineTo(pivot2.dx, pivot2.dy)
-      ..lineTo(to.dx, to.dy);
+    if (dragging) {
+      // dragging
+      final dX = to.dx - from.dx;
+      final dY = to.dy - from.dy;
+      if (dY.abs() > dX.abs()) {
+        // vertical heading
+        pivot2 = Offset(end.dx, pivot1.dy);
+      } else {
+        // horizontal heading
+        if (dX >= 0) {
+          pivot2 = Offset(end.dx - params.tailLength, pivot1.dy);
+          pivot3 = Offset(pivot2.dx, end.dy);
+        } else {
+          pivot2 = Offset(end.dx + params.tailLength, pivot1.dy);
+          pivot3 = Offset(pivot2.dx, end.dy);
+        }
+      }
+    }
 
     lines.addAll([
-      [from, pivot2],
-      [pivot2, to],
+      [pivot0, pivot1],
     ]);
+    path
+      ..moveTo(pivot0.dx, pivot0.dy)
+      ..lineTo(pivot1.dx, pivot1.dy);
+    if (pivot2 != null) {
+      path.lineTo(pivot2.dx, pivot2.dy);
+      lines.add([pivot1, pivot2]);
+    }
+    if (pivot3 != null) {
+      path.lineTo(pivot3.dx, pivot3.dy);
+      lines.add([pivot2!, pivot3]);
+    }
+    if (pivot4 != null) {
+      path.lineTo(pivot4.dx, pivot4.dy);
+      lines.add([pivot3!, pivot4]);
+    }
+    if (pivot5 != null) {
+      path.lineTo(pivot5.dx, pivot5.dy);
+      lines.add([pivot4!, pivot5]);
+    }
+    path.lineTo(end.dx, end.dy);
   }
 
-  /// Draws a curve starting/ending the handler linearly from the center
+  /// Draws a curve starting/tail the handler linearly from the center
   /// of the element.
   void drawCurve(Canvas canvas, Paint paint) {
     var distance = 0.0;
@@ -380,7 +1140,8 @@ class ArrowPainter extends CustomPainter {
     var dy = 0.0;
 
     final p0 = Offset(from.dx, from.dy);
-    final p4 = Offset(to.dx, to.dy);
+    final p4 = calculateLineEndOffset(to);
+
     distance = (p4 - p0).distance / 3;
 
     // checks for the arrow direction
