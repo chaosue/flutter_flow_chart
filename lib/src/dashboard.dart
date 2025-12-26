@@ -595,10 +595,11 @@ class Dashboard<T> extends ChangeNotifier {
           pivots: [],
         );
         sourceElement.next.add(conn);
-        for (final listener in _connectionListeners) {
-          listener(sourceElement, elements[i]);
+        if (notify) {
+          for (final listener in _connectionListeners) {
+            listener(sourceElement, elements[i]);
+          }
         }
-
         found++;
       }
     }
@@ -614,20 +615,29 @@ class Dashboard<T> extends ChangeNotifier {
 
   //******************************* */
   /// manage load/save using json
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap({bool includeElementData = true}) {
     return <String, dynamic>{
-      'elements': elements.map((x) => x.toMap()).toList(),
+      'elements': elements
+          .map((x) => x.toMap(includeElementData: includeElementData))
+          .toList(),
       'dashboardSizeWidth': dashboardSize.width,
       'dashboardSizeHeight': dashboardSize.height,
       'gridBackgroundParams': gridBackgroundParams.toMap(),
       'blockDefaultZoomGestures': blockDefaultZoomGestures,
       'minimumZoomFactor': minimumZoomFactor,
       'arrowStyle': defaultArrowStyle.index,
+      'arrowEndingStyle': defaultArrowEndingStyle.index,
+      'arrowColor': defaultArrowColor.toARGB32(),
+      'arrowEndingSize': {
+        'width': defaultArrowEndingSize.width,
+        'height': defaultArrowEndingSize.height,
+      },
     };
   }
 
   ///
-  String toJson() => json.encode(toMap());
+  String toJson({bool includeElementData = true}) =>
+      json.encode(toMap(includeElementData: includeElementData));
 
   ///
   String prettyJson() {
@@ -680,6 +690,17 @@ class Dashboard<T> extends ChangeNotifier {
     dashboardSize = Size(
       (source['dashboardSizeWidth'] as num).toDouble(),
       (source['dashboardSizeHeight'] as num).toDouble(),
+    );
+    _defaultArrowStyle = ArrowStyle.values[source['arrowStyle'] as int? ?? 0];
+    _defaultArrowEndingStyle =
+        ArrowEndingStyle.values[source['arrowEndingStyle'] as int? ?? 0];
+    _defaultArrowColor =
+        Color(source['arrowColor'] as int? ?? Colors.black.toARGB32());
+    final arrowEndingSize =
+        source['arrowEndingSize'] as Map<String, dynamic>? ?? {};
+    _defaultArrowEndingSize = Size(
+      (arrowEndingSize['width'] as num? ?? 12).toDouble(),
+      (arrowEndingSize['height'] as num? ?? 16).toDouble(),
     );
 
     final loadedElements = List<FlowElement<T>>.from(

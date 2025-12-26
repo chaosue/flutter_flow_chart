@@ -44,7 +44,7 @@ class ArrowParams extends ChangeNotifier {
 
   ///
   factory ArrowParams.fromMap(Map<String, dynamic> map) {
-    final endingSize = map['endingSize'] as Map<String, double?>? ??
+    final endingSize = map['endingSize'] as Map<String, dynamic>? ??
         const {'width': 12, 'height': 16};
     return ArrowParams(
       thickness: (map['thickness'] as num).toDouble(),
@@ -53,7 +53,10 @@ class ArrowParams extends ChangeNotifier {
       color: Color(map['color'] as int),
       style: ArrowStyle.values[map['style'] as int? ?? 0],
       endingStyle: ArrowEndingStyle.values[map['endingStyle'] as int? ?? 0],
-      endingSize: Size(endingSize['width'] ?? 12, endingSize['height'] ?? 16),
+      endingSize: Size(
+        (endingSize['width'] as num? ?? 12).toDouble(),
+        (endingSize['height'] as num? ?? 16).toDouble(),
+      ),
       tension: ((map['tension'] ?? 1) as num).toDouble(),
       startArrowPosition: Alignment(
         (map['startArrowPositionX'] as num).toDouble(),

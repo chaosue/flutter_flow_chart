@@ -362,7 +362,7 @@ class FlowElement<T> extends ChangeNotifier {
   }
 
   ///
-  Map<String, dynamic> toMap() {
+  Map<String, dynamic> toMap({bool includeElementData = true}) {
     return <String, dynamic>{
       'positionDx': position.dx,
       'positionDy': position.dy,
@@ -382,8 +382,9 @@ class FlowElement<T> extends ChangeNotifier {
       'borderThickness': borderThickness,
       'elevation': elevation,
       'data': serializedData,
-      'elementData':
-          store.getSerializer<T>()?.toJson(elementData) ?? elementData,
+      'elementData': includeElementData
+          ? store.getSerializer<T>()?.toJson(elementData) ?? elementData
+          : null,
       'next': next.map((x) => x.toMap()).toList(),
       'isDraggable': isDraggable,
       'isResizable': isResizable,
