@@ -3,6 +3,7 @@
 
 import 'dart:convert';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_flow_chart/flutter_flow_chart.dart';
 import 'package:flutter_flow_chart/src/platform/platform.dart';
@@ -147,6 +148,20 @@ class Dashboard<T> extends ChangeNotifier {
 
   final List<ConnectionListener<T>> _connectionListeners = [];
 
+  final _readonly = ValueNotifier(false);
+
+  ///
+  ValueListenable<bool> get readonly => _readonly;
+
+  /// in readonly mode, user can't create new connection
+  void setReadonly(bool value) => _readonly.value = value;
+  
+  @override
+  void dispose(){
+    _readonly.dispose();
+    super.dispose();
+  }
+  
   /// add listener called when a new connection is created
   void addConnectionListener(ConnectionListener<T> listener) {
     _connectionListeners.add(listener);

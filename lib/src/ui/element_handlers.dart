@@ -73,16 +73,33 @@ class ElementHandlers<T> extends StatelessWidget {
         children: [
           child,
           for (int i = 0; i < element.handlers.length; i++)
-            _ElementHandler(
-              element: element,
-              handler: element.handlers[i],
-              dashboard: dashboard,
-              handlerSize: handlerSize,
-              onHandlerPressed: onHandlerPressed,
-              onHandlerSecondaryTapped: onHandlerSecondaryTapped,
-              onHandlerLongPressed: onHandlerLongPressed,
-              onHandlerSecondaryLongTapped: onHandlerSecondaryLongTapped,
-            ),
+            // in readonly mode, do not draw handler if it is not connected to 
+            // any other element
+            if (!dashboard.readonly.value ||
+                dashboard.elements.indexWhere(
+                      (e) =>
+                          e.next.indexWhere(
+                            (h) =>
+                                (h.destElementId == element.id &&
+                                    h.arrowParams.endArrowPosition ==
+                                        element.handlers[i].toAlignment()) ||
+                                (e.id == element.id &&
+                                    h.arrowParams.startArrowPosition ==
+                                        element.handlers[i].toAlignment()),
+                          ) >=
+                          0,
+                    ) >=
+                    0)
+              _ElementHandler(
+                element: element,
+                handler: element.handlers[i],
+                dashboard: dashboard,
+                handlerSize: handlerSize,
+                onHandlerPressed: onHandlerPressed,
+                onHandlerSecondaryTapped: onHandlerSecondaryTapped,
+                onHandlerLongPressed: onHandlerLongPressed,
+                onHandlerSecondaryLongTapped: onHandlerSecondaryLongTapped,
+              ),
         ],
       ),
     );
@@ -153,118 +170,129 @@ class _ElementHandler<T> extends StatelessWidget {
     var secondaryTapDown = Offset.zero;
     return Align(
       alignment: alignment,
-      child: DragTarget<Map<dynamic, dynamic>>(
-        onWillAcceptWithDetails: (details) {
-          DrawingArrow.instance
-            ..setParams(
-              DrawingArrow.instance.params.copyWith(
-                endArrowPosition: alignment,
-                style: dashboard.defaultArrowStyle,
-              ),
-            )
-            ..setDestElementSize(element.size);
-          return element != details.data['srcElement'] as FlowElement<T>;
-        },
-        onAcceptWithDetails: (details) {
-          dashboard.addNextById(
-            details.data['srcElement'] as FlowElement<T>,
-            element.id,
-            DrawingArrow.instance.params.copyWith(
-              endArrowPosition: alignment,
-            ),
-          );
-        },
-        onLeave: (data) {
-          DrawingArrow.instance.setParams(
-            DrawingArrow.instance.params.copyWith(
-              endArrowPosition: Alignment.center,
-              style: dashboard.defaultArrowStyle,
-            ),
-          );
-        },
-        builder: (context, candidateData, rejectedData) {
-          return Draggable(
-            feedback: const SizedBox.shrink(),
-            feedbackOffset: dashboard.handlerFeedbackOffset,
-            childWhenDragging: HandlerWidget(
-              width: handlerSize,
-              height: handlerSize,
-              backgroundColor: Colors.blue,
-            ),
-            data: {
-              'srcElement': element,
-              'alignment': alignment,
+      child: ValueListenableBuilder(
+        valueListenable: dashboard.readonly,
+        builder: (context, readonly, _) {
+          return DragTarget<Map<dynamic, dynamic>>(
+            onWillAcceptWithDetails: (details) {
+              DrawingArrow.instance
+                ..setParams(
+                  DrawingArrow.instance.params.copyWith(
+                    endArrowPosition: alignment,
+                    style: dashboard.defaultArrowStyle,
+                  ),
+                )
+                ..setDestElementSize(element.size);
+              return element != details.data['srcElement'] as FlowElement<T>;
             },
-            child: GestureDetector(
-              onTapDown: (details) =>
-                  tapDown = details.globalPosition - dashboard.position,
-              onSecondaryTapDown: (details) => secondaryTapDown =
-                  details.globalPosition - dashboard.position,
-              onTap: () {
-                onHandlerPressed?.call(
-                  context,
-                  tapDown,
-                  handler,
-                  element,
-                );
-              },
-              onSecondaryTap: () {
-                onHandlerSecondaryTapped?.call(
-                  context,
-                  secondaryTapDown,
-                  handler,
-                  element,
-                );
-              },
-              onLongPress: () {
-                onHandlerLongPressed?.call(
-                  context,
-                  tapDown,
-                  handler,
-                  element,
-                );
-              },
-              onSecondaryLongPress: () {
-                onHandlerSecondaryLongTapped?.call(
-                  context,
-                  secondaryTapDown,
-                  handler,
-                  element,
-                );
-              },
-              child: HandlerWidget(
-                width: handlerSize,
-                height: handlerSize,
-              ),
-            ),
-            onDragStarted: () {
-              DrawingArrow.instance.setSrcElementSize(element.size);
-            },
-            onDragUpdate: (details) {
-              if (!isDragging) {
-                DrawingArrow.instance
-                  ..setParams(
-                    ArrowParams(
-                      startArrowPosition: alignment,
-                      endArrowPosition: Alignment.center,
-                      style: dashboard.defaultArrowStyle,
-                      endingStyle: dashboard.defaultArrowEndingStyle,
-                      endingSize: dashboard.defaultArrowEndingSize,
-                      color: dashboard.defaultArrowColor,
-                    ),
-                  )
-                  ..setFrom(details.globalPosition - dashboard.position);
-                isDragging = true;
-              }
-              DrawingArrow.instance.setTo(
-                details.globalPosition -
-                    dashboard.position +
-                    dashboard.handlerFeedbackOffset,
+            onAcceptWithDetails: (details) {
+              dashboard.addNextById(
+                details.data['srcElement'] as FlowElement<T>,
+                element.id,
+                DrawingArrow.instance.params.copyWith(
+                  endArrowPosition: alignment,
+                ),
               );
             },
-            onDragEnd: (details) {
-              DrawingArrow.instance.reset();
-              isDragging = false;
+            onLeave: (data) {
+              DrawingArrow.instance.setParams(
+                DrawingArrow.instance.params.copyWith(
+                  endArrowPosition: Alignment.center,
+                  style: dashboard.defaultArrowStyle,
+                ),
+              );
+            },
+            builder: (context, candidateData, rejectedData) {
+              if (readonly) {
+                return HandlerWidget(
+                  width: handlerSize,
+                  height: handlerSize,
+                );
+              }
+              return Draggable(
+                feedback: const SizedBox.shrink(),
+                feedbackOffset: dashboard.handlerFeedbackOffset,
+                childWhenDragging: HandlerWidget(
+                  width: handlerSize,
+                  height: handlerSize,
+                  backgroundColor: Colors.blue,
+                ),
+                data: {
+                  'srcElement': element,
+                  'alignment': alignment,
+                },
+                child: GestureDetector(
+                  onTapDown: (details) =>
+                      tapDown = details.globalPosition - dashboard.position,
+                  onSecondaryTapDown: (details) => secondaryTapDown =
+                      details.globalPosition - dashboard.position,
+                  onTap: () {
+                    onHandlerPressed?.call(
+                      context,
+                      tapDown,
+                      handler,
+                      element,
+                    );
+                  },
+                  onSecondaryTap: () {
+                    onHandlerSecondaryTapped?.call(
+                      context,
+                      secondaryTapDown,
+                      handler,
+                      element,
+                    );
+                  },
+                  onLongPress: () {
+                    onHandlerLongPressed?.call(
+                      context,
+                      tapDown,
+                      handler,
+                      element,
+                    );
+                  },
+                  onSecondaryLongPress: () {
+                    onHandlerSecondaryLongTapped?.call(
+                      context,
+                      secondaryTapDown,
+                      handler,
+                      element,
+                    );
+                  },
+                  child: HandlerWidget(
+                    width: handlerSize,
+                    height: handlerSize,
+                  ),
+                ),
+                onDragStarted: () {
+                  DrawingArrow.instance.setSrcElementSize(element.size);
+                },
+                onDragUpdate: (details) {
+                  if (!isDragging) {
+                    DrawingArrow.instance
+                      ..setParams(
+                        ArrowParams(
+                          startArrowPosition: alignment,
+                          endArrowPosition: Alignment.center,
+                          style: dashboard.defaultArrowStyle,
+                          endingStyle: dashboard.defaultArrowEndingStyle,
+                          endingSize: dashboard.defaultArrowEndingSize,
+                          color: dashboard.defaultArrowColor,
+                        ),
+                      )
+                      ..setFrom(details.globalPosition - dashboard.position);
+                    isDragging = true;
+                  }
+                  DrawingArrow.instance.setTo(
+                    details.globalPosition -
+                        dashboard.position +
+                        dashboard.handlerFeedbackOffset,
+                  );
+                },
+                onDragEnd: (details) {
+                  DrawingArrow.instance.reset();
+                  isDragging = false;
+                },
+              );
             },
           );
         },
