@@ -707,8 +707,12 @@ class Dashboard<T> extends ChangeNotifier {
     gridBackgroundParams.setScale(
       gridBackgroundParams.scale,
       Offset(
-        gridBackgroundParams.offset.dx / (1 - gridBackgroundParams.scale),
-        gridBackgroundParams.offset.dy / (1 - gridBackgroundParams.scale),
+        gridBackgroundParams.scale == 1
+            ? 0
+            : gridBackgroundParams.offset.dx / (1 - gridBackgroundParams.scale),
+        gridBackgroundParams.scale == 1
+            ? 0
+            : gridBackgroundParams.offset.dy / (1 - gridBackgroundParams.scale),
       ),
     );
     blockDefaultZoomGestures = source['blockDefaultZoomGestures'] as bool;
