@@ -69,6 +69,10 @@ class GridBackgroundParams extends ChangeNotifier {
   final List<void Function(double scale)> _onScaleUpdateListeners = [];
 
   ///
+  List<void Function(double scale)> get onScaleUpdateListeners =>
+      _onScaleUpdateListeners;
+
+  ///
   set offset(Offset delta) {
     _offset += delta;
     notifyListeners();

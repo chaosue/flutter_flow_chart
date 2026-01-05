@@ -155,13 +155,13 @@ class Dashboard<T> extends ChangeNotifier {
 
   /// in readonly mode, user can't create new connection
   void setReadonly(bool value) => _readonly.value = value;
-  
+
   @override
-  void dispose(){
+  void dispose() {
     _readonly.dispose();
     super.dispose();
   }
-  
+
   /// add listener called when a new connection is created
   void addConnectionListener(ConnectionListener<T> listener) {
     _connectionListeners.add(listener);
@@ -696,10 +696,13 @@ class Dashboard<T> extends ChangeNotifier {
   /// clear the dashboard and load the new one from [source] json
   void loadDashboardData(Map<String, dynamic> source) {
     elements.clear();
-
+    final onScaleUpdateListeners = gridBackgroundParams.onScaleUpdateListeners;
     gridBackgroundParams = GridBackgroundParams.fromMap(
       source['gridBackgroundParams'] as Map<String, dynamic>,
     );
+    for (final l in onScaleUpdateListeners) {
+      gridBackgroundParams.addOnScaleUpdateListener(l);
+    }
     blockDefaultZoomGestures = source['blockDefaultZoomGestures'] as bool;
     minimumZoomFactor = (source['minimumZoomFactor'] as num).toDouble();
     dashboardSize = Size(
