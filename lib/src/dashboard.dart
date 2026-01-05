@@ -703,6 +703,13 @@ class Dashboard<T> extends ChangeNotifier {
     for (final l in onScaleUpdateListeners) {
       gridBackgroundParams.addOnScaleUpdateListener(l);
     }
+    gridBackgroundParams.setScale(
+      gridBackgroundParams.scale,
+      Offset(
+        gridBackgroundParams.offset.dx / (1 - gridBackgroundParams.scale),
+        gridBackgroundParams.offset.dy / (1 - gridBackgroundParams.scale),
+      ),
+    );
     blockDefaultZoomGestures = source['blockDefaultZoomGestures'] as bool;
     minimumZoomFactor = (source['minimumZoomFactor'] as num).toDouble();
     dashboardSize = Size(
