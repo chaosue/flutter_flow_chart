@@ -149,6 +149,7 @@ class _FlowChartState<T> extends State<FlowChart<T>> {
     if (widget.onNewConnection != null) {
       widget.dashboard.addConnectionListener(widget.onNewConnection!);
     }
+    _oldScaleUpdateDelta = widget.dashboard.gridBackgroundParams.scale;
   }
 
   @override
