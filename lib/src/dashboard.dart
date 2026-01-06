@@ -686,16 +686,17 @@ class Dashboard<T> extends ChangeNotifier {
   }
 
   /// clear the dashboard and load the new one from file [completeFilePath]
-  void loadDashboard(String completeFilePath) {
+  void loadDashboard(String completeFilePath, {bool doRecenter = true}) {
     final data = readDashboardData(completeFilePath);
     if (data != null) {
       final source = json.decode(data) as Map<String, dynamic>;
-      loadDashboardData(source);
+      loadDashboardData(source, doRecenter: doRecenter);
     }
   }
 
   /// clear the dashboard and load the new one from [source] json
-  void loadDashboardData(Map<String, dynamic> source) {
+  void loadDashboardData(Map<String, dynamic> source,
+      {bool doRecenter = true}) {
     elements.clear();
     final onScaleUpdateListeners = gridBackgroundParams.onScaleUpdateListeners;
     gridBackgroundParams = GridBackgroundParams.fromMap(
@@ -741,7 +742,7 @@ class Dashboard<T> extends ChangeNotifier {
     elements
       ..clear()
       ..addAll(loadedElements);
-
+    if (!doRecenter) return;
     recenter();
   }
 }
