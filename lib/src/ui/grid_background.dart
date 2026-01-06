@@ -111,6 +111,29 @@ class GridBackgroundParams extends ChangeNotifier {
       'gridColor': gridColor.toARGB32(),
     };
   }
+
+  /// Returns a new instance of [GridBackgroundParams] with the given values.
+  GridBackgroundParams copyWith({
+    double? gridSquare,
+    double? gridThickness,
+    int? secondarySquareStep,
+    Color? backgroundColor,
+    Color? gridColor,
+    void Function(double scale)? onScaleUpdate,
+  }) {
+    final params = GridBackgroundParams(
+      gridSquare: gridSquare ?? rawGridSquareSize,
+      gridThickness: gridThickness ?? this.gridThickness,
+      secondarySquareStep: secondarySquareStep ?? this.secondarySquareStep,
+      backgroundColor: backgroundColor ?? this.backgroundColor,
+      gridColor: gridColor ?? this.gridColor,
+      onScaleUpdate: onScaleUpdate,
+    )
+      ..scale = scale
+      ..offset = _offset
+      .._onScaleUpdateListeners.addAll(_onScaleUpdateListeners);
+    return params;
+  }
 }
 
 /// Uses a CustomPainter to draw a grid with the given parameters
