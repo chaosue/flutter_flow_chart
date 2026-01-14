@@ -583,6 +583,24 @@ class Dashboard<T> extends ChangeNotifier {
   /// offsets for drag and drop elements
   void setDashboardPosition(Offset position) => _dashboardPosition = position;
 
+  /// update dashboard position to [position] and move to it.
+  void moveToPosition(Offset position) {
+    final center = Offset(dashboardSize.width / 2, dashboardSize.height / 2);
+    gridBackgroundParams.offset = center;
+    if (elements.isNotEmpty) {
+      final currentDeviation = position - center;
+      for (final element in elements) {
+        element.position -= currentDeviation;
+        for (final next in element.next) {
+          for (final pivot in next.pivots) {
+            pivot.pivot -= currentDeviation;
+          }
+        }
+      }
+    }
+    notifyListeners();
+  }
+
   /// Get the position.
   Offset get position => _dashboardPosition;
 
